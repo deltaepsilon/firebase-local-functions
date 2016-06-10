@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/deltaepsilon/firebase-local-functions",
   "dependencies": {
-    "firebase": "^3.0.4"
+    "firebase": "^3.0.4",
+    "lodash": "^4.13.1"
   }
 }
