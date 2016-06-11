@@ -1,6 +1,16 @@
 var _ = require('lodash');
 var firebase = require('firebase');
 
+var getChildSnapByKey = function (snap, key) {
+  var result;
+  snap.forEach(function (childSnap) {
+    if (key === childSnap.getKey()) {
+      result = childSnap;
+    }
+  });
+  return result;
+};
+
 module.exports = function (config) {
   if (!Array.isArray(config.specs)) {
     console.log('specs must be an array');
@@ -25,79 +35,160 @@ module.exports = function (config) {
     //   }
     // });
     var PARTS_REGEX = new RegExp('[^{}]+', 'g');
-    var parts = spec.path.match(PARTS_REGEX);
-    var path = parts[0];
-    var keyname = parts[1];
-    var childRef = ref.child(path);
+    var pathSpecs = [];
+    var parts = spec.path.split('/').reverse();
+    var i = parts.length;
+    while (i--) {
+      if (!parts[i].length) {
+        parts.splice(i, 1);
+      } else if (parts[i].substring(0, 1) === '{') {
+        pathSpecs.push({
+          isWildcard: true,
+          name: parts[i].match(/[^{}]+/)[0]
+        });
+      } else {
+        pathSpecs.push({
+          name: parts[i]
+        });
+      }
+    }
+
+    if (pathSpecs[0].isWildcard) {
+      console.log("The first part of a spec's path cannot be a wildcard!");
+    }
+
+    var staticParts = [];
+    var specLength = pathSpecs.length;
+    for (var j = 0; j < specLength; j++) {
+      if (!pathSpecs[j].isWildcard) {
+        staticParts.push(pathSpecs[j].name);
+      } else {
+        break;
+      }
+    }
+    pathSpecs.splice(0, staticParts.length);
+
+    var getChildSnaps = function (snaps, paths) {
+      var localPaths = _.clone(paths);
+      var path = localPaths.shift();
+      var snaps = Array.isArray(snaps) ? snaps : [snaps];
+      var childSnaps = [];
+
+      snaps.forEach(function (snap) {
+        var parentPaths = snap.paths || [];
+
+        if (path.isWildcard) {
+          snap.forEach(function (childSnap) {
+            var snapPath = _.clone(path);
+            snapPath.key = childSnap.getKey();
+            childSnap.paths = parentPaths.concat([snapPath]);
+            childSnaps.push(childSnap);
+          });
+        } else {
+          var childSnap = getChildSnapByKey(snap, path.name);
+          var snapPath = _.clone(path);
+          snapPath.key = childSnap.getKey();
+          childSnap.paths = parentPaths.concat([snapPath]);
+          childSnaps.push(childSnap);
+        }
+      });
+
+      if (!localPaths.length) {
+        // childSnaps.forEach(function(snap) {
+        //   console.log('snap', typeof snap);
+        // });
+        return childSnaps;
+      } else {
+        return getChildSnaps(childSnaps, localPaths);
+      }
+    };
+
+    var childRef = ref.child(staticParts.join('/'));
     childRef.once('value', function (snap) {
-      var previousSnap = snap;
+      var previousSnaps = getChildSnaps(snap, pathSpecs);
 
       childRef.on('value', function (snap) {
+        // Step through the tree for non-wildcard path elements
+        // Must loop through all children for every wildcard.
+
+        var childSnaps = getChildSnaps(snap, pathSpecs);
+
+        // childSnaps.forEach(function (snap, i) {
+        //   console.log('snap', i, snap.getKey(), snap.paths, snap.val(), "\n\n");
+        // });
+
         //  Keys
-        var keys = Object.keys(snap.val() || {});
-        var previousKeys = Object.keys(previousSnap.val() || {});
+        var currentKeys = _.map(childSnaps, function(snap) {
+          return snap.getKey();
+        });
+        var previousKeys = _.map(previousSnaps, function(snap) {
+          return snap.getKey();
+        }); 
         var snaps = [];
 
         //  Additions and removals
-        _.each(_.difference(keys, previousKeys).concat(_.difference(previousKeys, keys)), function (key) {
-          var getSnapMock = function() {
+        // console.log('additions', _.difference(currentKeys, previousKeys));
+        // console.log('removals', _.difference(previousKeys, currentKeys));
+        _.each(_.difference(currentKeys, previousKeys).concat(_.difference(previousKeys, currentKeys)), function (key) {
+          var ref = childRef.child(key);
+          var getSnapMock = function () {
             return {
-              ref: function() {
-                return childRef.child(key);
+              ref: function () {
+                return ref;
               },
-              val: function() {
+              val: function () {
                 return;
               },
-              getKey: function() {
+              getKey: function () {
                 return key;
-              },
-              toString: function() {
-                return childRef.child(key).toString();
               }
             };
           };
           var current = getSnapMock();
           var previous = getSnapMock();
 
-          snap.forEach(function (childSnap) { // Find current snap
+          childSnaps.forEach(function (childSnap) { // Find current snap
             if (key === childSnap.getKey()) {
               current = childSnap;
             };
           });
 
-          previousSnap.forEach(function (childSnap) { // Find previous snap
+          previousSnaps.forEach(function (childSnap) { // Find previous snap
             if (key === childSnap.getKey()) {
               previous = childSnap;
             };
           });
 
-          current.current = function() {
+          current.current = function () {
             return current;
           };
 
           snaps.push({
-            getKey: function() {
+            getKey: function () {
               return key;
             },
-            val: function() {
+            val: function () {
               return current.val();
             },
-            previous: function() {
+            previous: function () {
               return previous;
             },
-            changed: function() {
+            changed: function () {
               return true;
             },
-            current: function() {
+            current: function () {
               return current;
-            }
+            },
+            ref: current.ref,
+            _path: current.ref.path ? current.ref.path.toString() : previous.ref.path.toString(),
+            paths: current.paths || previous.paths
           });
         });
 
         // Changes
-        snap.forEach(function (childSnap) {
-          previousSnap.forEach(function (previousChildSnap) {
-            if (childSnap.getKey() === previousChildSnap.getKey()) {              
+        childSnaps.forEach(function (childSnap) {
+          previousSnaps.forEach(function (previousChildSnap) {
+            if (childSnap.getKey() === previousChildSnap.getKey()) {
               var val = childSnap.val();
               var previous = previousChildSnap.val();
 
@@ -122,13 +213,13 @@ module.exports = function (config) {
                 };
 
                 childSnap._delta = delta;
-                childSnap.previous = function() {
+                childSnap.previous = function () {
                   return previousChildSnap;
                 };
-                childSnap.changed = function(key) {
+                childSnap.changed = function (key) {
                   return ~Object.keys(delta).indexOf(key);
                 };
-                childSnap.current = function() {
+                childSnap.current = function () {
                   return childSnap;
                 };
 
@@ -152,21 +243,26 @@ module.exports = function (config) {
               environment: 'development'
             }
           };
-          Object.keys(snap).forEach(function(key) {
-            console.log(key, snap[key]);
-          });
-          // console.log('path', snap.path, typeof snap.path)
-          e.data._path = snap.ref.path.toString();
+          
+          e.data._path = snap._path || snap.ref.path.toString();
           e.data._data = val;
           e.data._newData = snap.previous().val() || {};
-          if (keyname) {
-            e.params[keyname] = key;
-          }
+          snap.paths.forEach(function(path) {
+            e.params[path.name] = path.key;
+          });
 
-          spec.func(e);
+          // Set up e.data.ref() and e.data.adminRef()
+          var uid = e.params.uid || e.data.val().uid;
+          e.data.adminRef = snap.ref;
+          try {
+            spec.func.call(this, e);
+          } catch (err) {
+            console.error(spec.name, 'error:', err);
+          }
+          
         });
 
-        previousSnap = snap;
+        previousSnaps = childSnaps; // Update previousSnaps to most recent childSnaps
       });
     });
   });
