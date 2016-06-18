@@ -28,13 +28,6 @@ module.exports = function (config) {
   var ref = firebase.app('localFunctionsRunner').database().ref(config.path);
 
   config.specs.forEach(function (spec) {
-    // firebase.initializeApp({
-    //   databaseURL: "https://databaseName.firebaseio.com",
-    //   serviceAccount: "path/to/serviceAccountCredentials.json",
-    //   databaseAuthVariableOverride: {
-    //     uid: "my-service-worker"
-    //   }
-    // });
     var PARTS_REGEX = new RegExp('[^{}]+', 'g');
     var pathSpecs = [];
     var parts = spec.path.split('/').reverse();
@@ -343,7 +336,7 @@ module.exports = function (config) {
 //   deviceId: undefined,
 //   data:
 //    { _path: '/imageViewer/development/users/WQ3mVT7f8pRbBmry6eZju1Z4lPi1',
-//      _authToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpYXQiOjE0NjU1NTM4NzYsImV4cCI6MTQ2NTU1NzQ3NiwiYWRtaW4iOnRydWUsInYiOjB9OQCHT59JZyTOFgFpkM_P7dGU0W7QvqsAnT9aBW-glIA',
+//      _authToken: 'asdfadfddsf',
 //      _data:
 //       { email: 'chris@quiver.is',
 //         login: 'Thu Jun 09 2016 14:53:45 GMT-0600 (MDT)',

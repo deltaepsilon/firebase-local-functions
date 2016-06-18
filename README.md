@@ -1,5 +1,6 @@
 ### Installation
-- Run ```npm install --save-dev firebase-local-functions```
+- ```npm install --save-dev https://github.com/deltaepsilon/firebase-local-functions.git```
+- Once it's public I hope to publish such that you can run ```npm install --save-dev firebase-local-functions```
 
 ### Specs
 In order to run functions in both the Google Cloud Functions environment and the local environment, we need to decouple the functions and their specifications from the Firebase Functions call. We accomplish this by creating a ```specs.js``` file where we'll export all of our specs. Here's an example:
@@ -19,7 +20,7 @@ module.exports = [
 ];
 ```
 
-Notice how each function has name, a path to listen to and the function itself. In this case we're logging events for test purposes, so the function is in ```./log-event.js``` and looks something like this:
+Notice how each function has a name, a path to listen to and the function itself. In this case we're logging events for test purposes, so the function is in ```./log-event.js``` and looks something like this:
 
 ```
 module.exports = function (e) {
