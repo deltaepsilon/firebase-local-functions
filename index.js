@@ -123,7 +123,7 @@ module.exports = function (config) {
 
       paths.forEach(function (path) {
         var url = root + '/' + path + '.json?' + [
-          'secret=' + config.firebaseConfig.secret,
+          'auth=' + config.firebaseConfig.secret,
           'shallow=true'
         ].join('&');
 

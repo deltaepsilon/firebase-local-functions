@@ -48,6 +48,28 @@ module.exports = function (e) {
 };
 ```
 
+### Running locally
+Create a local runner file. I like to call mine ```runner.js```. Make it look something like this:
+
+```
+var localFunctions = require('firebase-local-functions')({
+      specs: require('./specs.js'),
+      firebaseConfig: {
+        "databaseURL": "https://my-firebase.firebaseio.com",
+        "serviceAccount": "./service-account.json",
+        "secret": "ASDASDFADSFADSFADSFADSF"
+      },
+      path: 'somePath/development'
+    });
+```
+
+The ```secret``` attribute is your database secret, a.k.a. your legacy Firebase token, which ```firebase-local-functions``` uses to navigate the REST api regardless of your security rules.
+
+The ```path``` attribute lets you listen to a node other than the root of your project.
+
+***Local Limitations***
+Firebase Functions are called with event objects that have a simulated user-authenticated ref at ```event.data.ref```. This simulation is not possible locally. This "user" ref is equivalent to ```event.data.adminRef```.
+
 ### Running on Firebase infrastructure
 You'll need to import all of your function into ```<project folder>/functions/index.js``` in order to run them. ```index.js``` can look something like this:
 
