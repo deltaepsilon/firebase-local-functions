@@ -241,16 +241,17 @@ module.exports = function (config) {
               key: snap.key,
               ref: snap.ref
             };
+            var prevVal = previous.val();
 
             var event = {
               service: 'firebase.database',
-              type: undefined,
+              type: 'write',
               instance: config.firebaseConfig.databaseUrl,
               deviceId: undefined,
               data: snap,
               params: record.params,
-              _path: record.path,
-              _data: val,
+              path: record.path,
+              _data: prevVal,
               _newData: val,
               _delta: val
             };
@@ -263,9 +264,19 @@ module.exports = function (config) {
               return previous;
             };
 
-            setTimeout(function () {
-              spec.func.call(this, event); // Call functions
-            }.bind(this));
+            if (prevVal && typeof prevVal === 'object') {
+              _.each(event._delta, function (value, key) {
+                if (value === prevVal[key]) {
+                  delete event._delta[key];
+                }
+              });
+            }
+
+
+            childRef.once('value')
+              .then(function(snap) {
+                spec.func.call(this, event); // Call functions  
+              }.bind(this));
 
             if (record.value && !~existingPaths.indexOf(record.path)) {
               existingPaths.push(record.path);

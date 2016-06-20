@@ -45,12 +45,18 @@ ref.remove()
             if (log.addHandled) {
               t.equal(log.addHandled.uid, uid);
               t.equal(log.addHandled.key, key);
+              t.equal(log.addHandled.event._newData.now, now);
+              t.equal(log.addHandled.event._delta.now, now);
             } else {
               t.equal(log.removeHandled.uid, uid);
               t.equal(log.removeHandled.key, key);
+              t.equal(log.removeHandled.event._data.now, now);
               t.end();
               logsRef.off('child_added', handler);
             }
+          })
+          .catch(function(err) {
+            console.log('remove error', err);
           });
       };
       logsRef.on('child_added', handler);
@@ -70,12 +76,18 @@ ref.remove()
             if (log.addHandled) {
               t.equal(log.addHandled.uid, uid);
               t.equal(log.addHandled.key, key);
+              t.equal(log.addHandled.event._newData.now, now);
+              t.equal(log.addHandled.event._delta.now, now);
             } else {
               t.equal(log.removeHandled.uid, uid);
               t.equal(log.removeHandled.key, key);
+              t.equal(log.removeHandled.event._data.now, now);
               t.end();
               logsRef.off('child_added', handler);
             }
+          })
+          .catch(function(err) {
+            console.log('remove error', err);
           });
       };
       logsRef.on('child_added', handler);
@@ -88,34 +100,6 @@ ref.remove()
           t.equal(snap.val(), null);
         });
     });
-
-
-    // setTimeout(function () {
-    //   var pushPromises = [];
-    //   var pushKeys = {};
-    //   ['123', '456', '789'].forEach(function (uid) {
-    //     var userLoginQueuesRef = ref.child('queues/login/' + uid);
-    //     var changeQueueRef = ref.child('queues/change/' + uid + '/static/path/parts');
-    //     var key = userLoginQueuesRef.push().key;
-
-    //     pushKeys[key] = uid;
-
-    //     pushPromises.push(userLoginQueuesRef.child(key).set({
-    //       login: now
-    //     }));
-
-    //     pushPromises.push(changeQueueRef.child(key).set({
-    //       updated: now
-    //     }));
-    //   });
-
-    //   Promise.all(pushPromises)
-    //     .then(function() {
-    //       ref.child('log').on('child_added', function(snap) {
-    //         console.log('snap.val', snap.val());
-    //       });
-    //     });
-    // }, 1000);
 
   });
 
