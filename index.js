@@ -249,7 +249,7 @@ module.exports = function (config) {
               instance: config.firebaseConfig.databaseUrl,
               deviceId: undefined,
               data: snap,
-              params: record.params,
+              params: _.merge(record.params, config.params),
               path: record.path,
               _data: prevVal,
               _newData: val,

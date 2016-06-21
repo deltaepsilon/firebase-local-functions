@@ -60,13 +60,18 @@ var localFunctions = require('firebase-local-functions')({
         "serviceAccount": "./service-account.json",
         "secret": "ASDASDFADSFADSFADSFADSF"
       },
-      path: 'somePath/development'
+      path: 'somePath/development',
+      params: {
+	environment: 'development'
+      }
     });
 ```
 
 The ```secret``` attribute is your database secret, a.k.a. your legacy Firebase token, which ```firebase-local-functions``` uses to navigate the REST api regardless of your security rules.
 
 The ```path``` attribute lets you listen to a node other than the root of your project.
+
+The ```params``` attribute lets you set default params for every event. This is useful in the above example because your functions expect the {environment} parameter, but you can't pass wildcard paths into the ```path``` attribute... so use a static ```path``` and complement it with a static ```params``` object that will be merged onto the regular ```event.params``` object.
 
 ***Local Limitations***
 Firebase Functions are called with event objects that have a simulated user-authenticated ref at ```event.data.ref```. This simulation is not possible locally. This "user" ref is equivalent to ```event.data.adminRef```.
