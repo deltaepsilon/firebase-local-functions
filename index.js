@@ -160,6 +160,14 @@ module.exports = function (config) {
       var pathParts = path.split('/');
       var key = pathParts[pathParts.length - 1];
       var nextSpec = localSpecs[0];
+      var returnNewRecords = function () {
+        return ~existing.indexOf(path) ? [] : [{ // Skip existing records. Only add new records.
+          key: key,
+          value: value,
+          params: params,
+          path: path
+        }];
+      };
       // Pull off one part of the path
       // Pull off a matching spec
       // If the spec is not a wildcard, accumulate the value and recur
@@ -168,12 +176,7 @@ module.exports = function (config) {
         return [];
       }
       if (!spec) { // If you're out of specs, return the child record
-        return ~existing.indexOf(path) ? [] : [{ // Skip existing records. Only add new records.
-          key: key,
-          value: value,
-          params: params,
-          path: path
-        }];
+        return returnNewRecords();
       } else {
         if (spec.isWildcard) { // Set wildcard param if appropriate
           params[spec.name] = key;
@@ -182,6 +185,8 @@ module.exports = function (config) {
         if (nextSpec && !nextSpec.isWildcard) {
           // Static paths should just pass through and get called again
           return getChildRecords(path + '/' + nextSpec.name, value[nextSpec.name], params, localSpecs, existing);
+        } else if (!localSpecs.length) {
+          return returnNewRecords();
         } else {
           // Wildcard paths accumulate an array of all child paths
           return _.reduce(value, function (childRecords, wildValue, wildKey) {
@@ -274,7 +279,7 @@ module.exports = function (config) {
 
 
             childRef.once('value')
-              .then(function(snap) {
+              .then(function (snap) {
                 spec.func.call(this, event); // Call functions  
               }.bind(this));
 
