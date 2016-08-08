@@ -1,6 +1,8 @@
 var _ = require('lodash');
 var firebase = require('firebase');
 var axios = require('axios');
+var inherits = require('util').inherits;
+var EventEmitter = require('events').EventEmitter;
 
 var getChildSnapByKey = function (snap, key) {
   var result;
@@ -12,7 +14,10 @@ var getChildSnapByKey = function (snap, key) {
   return result;
 };
 
-module.exports = function (config) {
+function FirebaseLocalFunctions (config) {
+  if (!(this instanceof FirebaseLocalFunctions)) {
+    return new FirebaseLocalFunctions(config);
+  }
   if (!Array.isArray(config.specs)) {
     console.log('specs must be an array');
   }
@@ -25,6 +30,7 @@ module.exports = function (config) {
 
   firebase.initializeApp(config.firebaseConfig, 'localFunctionsRunner');
 
+  var runner = this;
   var ref = firebase.app('localFunctionsRunner').database().ref(config.path);
 
   config.specs.forEach(function (spec) {
@@ -104,6 +110,7 @@ module.exports = function (config) {
       currentSnap = snap;
       if (!previousSnap) {
         previousSnap = _.clone(currentSnap);
+        runner.emit('ready');
       }
     });
 
@@ -153,7 +160,7 @@ module.exports = function (config) {
         });
     };
 
-    var getChildRecords = function (path, value, params, specs, existing) {
+    var getChildRecords = function (path, value, params, specs, existing, force) {
       var params = params || {};
       var localSpecs = _.clone(specs);
       var spec = localSpecs.shift();
@@ -161,7 +168,7 @@ module.exports = function (config) {
       var key = pathParts[pathParts.length - 1];
       var nextSpec = localSpecs[0];
       var returnNewRecords = function () {
-        return ~existing.indexOf(path) ? [] : [{ // Skip existing records. Only add new records.
+        return ~existing.indexOf(path) && !force ? [] : [{ // Skip existing records. Only add new records.
           key: key,
           value: value,
           params: params,
@@ -184,7 +191,7 @@ module.exports = function (config) {
 
         if (nextSpec && !nextSpec.isWildcard) {
           // Static paths should just pass through and get called again
-          return getChildRecords(path + '/' + nextSpec.name, value[nextSpec.name], params, localSpecs, existing);
+          return getChildRecords(path + '/' + nextSpec.name, value[nextSpec.name], params, localSpecs, existing, force);
         } else if (!localSpecs.length) {
           return returnNewRecords();
         } else {
@@ -196,7 +203,7 @@ module.exports = function (config) {
             var wildPath = [path, wildKey].join('/');
 
             wildParams[wildSpec.name] = wildKey;
-            return childRecords.concat(getChildRecords(wildPath, wildValue, wildParams, wildSpecs, existing));
+            return childRecords.concat(getChildRecords(wildPath, wildValue, wildParams, wildSpecs, existing, force));
           }, []);
         }
       }
@@ -210,9 +217,9 @@ module.exports = function (config) {
           var keys = [];
 
           while (i--) {
-            // if (!previousSnap) {
-            //   debugger;
-            // }
+            if (!previousSnap) {
+              debugger;
+            }
             if (parts[i] !== previousSnap.key) {
               keys.unshift(parts[i]);
             } else {
@@ -289,8 +296,8 @@ module.exports = function (config) {
             previousSnap = _.clone(currentSnap);
           });
         };
-        var changedHandler = function (snap) {
-          var childRecords = getChildRecords(staticParts.concat([snap.key]).join('/'), snap.val(), {}, pathSpecs, existingPaths);
+        var changedHandler = function (snap, force) {          
+          var childRecords = getChildRecords(staticParts.concat([snap.key]).join('/'), snap.val(), {}, pathSpecs, existingPaths, force);
 
           if (!childRecords.length) {
             return getExisting(staticParts.join('/'), pathSpecs)
@@ -335,6 +342,9 @@ module.exports = function (config) {
         };
         childRef.on('child_added', changedHandler);
         childRef.on('child_changed', changedHandler);
+        childRef.on('child_changed', function (snap) {
+          changedHandler(snap, true);
+        })
         childRef.on('child_removed', function (snap) {
           snap.ref.once('value')
             .then(function (snap) {
@@ -342,8 +352,12 @@ module.exports = function (config) {
             });
         });
       });
+
   });
 };
+inherits(FirebaseLocalFunctions, EventEmitter);
+
+module.exports = FirebaseLocalFunctions;
 
 // { service: 'firebase.database',
 //   type: undefined,

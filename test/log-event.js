@@ -38,7 +38,7 @@ module.exports = function (e) {
       }
     })
       .then(function () {
-        return e.data.ref.remove();
+        return uid !== '456' ? e.data.ref.remove() : true;
       });
   } else {
     return e.data.ref.root.child('localFunctions/test/logs').push({
