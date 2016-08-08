@@ -14,7 +14,7 @@ var getChildSnapByKey = function (snap, key) {
   return result;
 };
 
-function FirebaseLocalFunctions (config) {
+function FirebaseLocalFunctions(config) {
   if (!(this instanceof FirebaseLocalFunctions)) {
     return new FirebaseLocalFunctions(config);
   }
@@ -32,6 +32,9 @@ function FirebaseLocalFunctions (config) {
 
   var runner = this;
   var ref = firebase.app('localFunctionsRunner').database().ref(config.path);
+  var specsCount = config.specs.length;
+  var specsCounter = 0;
+  var getExistingCounter = 0; 
 
   config.specs.forEach(function (spec) {
     var PARTS_REGEX = new RegExp('[^{}]+', 'g');
@@ -106,11 +109,16 @@ function FirebaseLocalFunctions (config) {
     var childRef = ref.child(staticParts.join('/'));
     var previousSnap;
     var currentSnap;
+    var ready = false;
     childRef.on('value', function (snap) {
       currentSnap = snap;
-      if (!previousSnap) {
+      if (!ready) {
+        ready = true;
+        specsCounter += 1;
         previousSnap = _.clone(currentSnap);
-        runner.emit('ready');
+        if (specsCounter === specsCount) {
+          runner.emit('specsLoaded');
+        }
       }
     });
 
@@ -209,150 +217,156 @@ function FirebaseLocalFunctions (config) {
       }
     };
 
-    getExisting(staticParts.join('/'), pathSpecs)
-      .then(function (existingPaths) {
-        var getPrevious = function (path) {
-          var parts = path.split('/');
-          var i = parts.length;
-          var keys = [];
+    runner.on('specsLoaded', function () {
+      getExisting(staticParts.join('/'), pathSpecs)
+        .then(function (existingPaths) {
+          var getPrevious = function (path) {
+            var parts = path.split('/');
+            var i = parts.length;
+            var keys = [];
 
-          while (i--) {
-            if (!previousSnap) {
-              debugger;
-            }
-            if (parts[i] !== previousSnap.key) {
-              keys.unshift(parts[i]);
-            } else {
-              break;
-            }
-          }
-
-          var getChildSnap = function (keys, snaps) {
-            var key = keys.shift();
-            var result;
-            snaps.forEach(function (childSnap) {
-              if (childSnap.key === key) {
-                if (keys.length) {
-                  result = getChildSnap(keys, childSnap);
-                } else {
-                  result = childSnap;
-                }
+            while (i--) {
+              if (!previousSnap) {
+                console.log('previousSnap missing. Wait for ready event.');
+                debugger;
               }
-            });
-            return result;
-          }
-          return getChildSnap(keys, previousSnap);
-        };
-        var processRecord = function (record) {
-          ref.child(record.path).once('value', function (snap) {
-            var val = snap.val();
-            var previous = getPrevious(record.path) || {
-              val: function () {
-                return undefined;
-              },
-              key: snap.key,
-              ref: snap.ref
-            };
-            var prevVal = previous.val();
+              if (parts[i] !== previousSnap.key) {
+                keys.unshift(parts[i]);
+              } else {
+                break;
+              }
+            }
 
-            var event = {
-              service: 'firebase.database',
-              type: 'write',
-              instance: config.firebaseConfig.databaseUrl,
-              deviceId: undefined,
-              data: snap,
-              params: _.merge(record.params, config.params),
-              path: record.path,
-              _data: prevVal,
-              _newData: val,
-              _delta: val
-            };
-            event.data.adminRef = snap.ref;
-            event.data.current = function () {
-              return snap.ref;
-            };
-            previous.current = event.data.current;
-            event.data.previous = function () {
-              return previous;
-            };
-
-            if (prevVal && typeof prevVal === 'object') {
-              _.each(event._delta, function (value, key) {
-                if (value === prevVal[key]) {
-                  delete event._delta[key];
+            var getChildSnap = function (keys, snaps) {
+              var key = keys.shift();
+              var result;
+              snaps.forEach(function (childSnap) {
+                if (childSnap.key === key) {
+                  if (keys.length) {
+                    result = getChildSnap(keys, childSnap);
+                  } else {
+                    result = childSnap;
+                  }
                 }
               });
+              return result;
             }
+            return getChildSnap(keys, previousSnap);
+          };
+          var processRecord = function (record) {
+            ref.child(record.path).once('value', function (snap) {
+              var val = snap.val();
+              var previous = getPrevious(record.path) || {
+                val: function () {
+                  return undefined;
+                },
+                key: snap.key,
+                ref: snap.ref
+              };
+              var prevVal = previous.val();
+
+              var event = {
+                service: 'firebase.database',
+                type: 'write',
+                instance: config.firebaseConfig.databaseUrl,
+                deviceId: undefined,
+                data: snap,
+                params: _.merge(record.params, config.params),
+                path: record.path,
+                _data: prevVal,
+                _newData: val,
+                _delta: val
+              };
+              event.data.adminRef = snap.ref;
+              event.data.current = function () {
+                return snap.ref;
+              };
+              previous.current = event.data.current;
+              event.data.previous = function () {
+                return previous;
+              };
+
+              if (prevVal && typeof prevVal === 'object') {
+                _.each(event._delta, function (value, key) {
+                  if (value === prevVal[key]) {
+                    delete event._delta[key];
+                  }
+                });
+              }
 
 
-            childRef.once('value')
-              .then(function (snap) {
-                spec.func.call(this, event); // Call functions  
-              }.bind(this));
+              childRef.once('value')
+                .then(function (snap) {
+                  spec.func.call(this, event); // Call functions  
+                }.bind(this));
 
-            if (record.value && !~existingPaths.indexOf(record.path)) {
-              existingPaths.push(record.path);
-            }
-            previousSnap = _.clone(currentSnap);
-          });
-        };
-        var changedHandler = function (snap, force) {          
-          var childRecords = getChildRecords(staticParts.concat([snap.key]).join('/'), snap.val(), {}, pathSpecs, existingPaths, force);
+              if (record.value && !~existingPaths.indexOf(record.path)) {
+                existingPaths.push(record.path);
+              }
+              previousSnap = _.clone(currentSnap);
+            });
+          };
+          var changedHandler = function (snap, force) {
+            var childRecords = getChildRecords(staticParts.concat([snap.key]).join('/'), snap.val(), {}, pathSpecs, existingPaths, force);
 
-          if (!childRecords.length) {
-            return getExisting(staticParts.join('/'), pathSpecs)
-              .then(function (existing) {
-                _.difference(existingPaths, existing).forEach(function (path) {
-                  var pathParts = path.split('/');
-                  var key = pathParts[pathParts.length - 1];
-                  var getParams = function (aPathParts, aPathSpecs, params, aStaticParts) {
-                    var i = aStaticParts ? aStaticParts.length : 0;
-                    while (i--) {
-                      aPathParts.splice(aPathParts.indexOf(aStaticParts[i]), 1);
+            if (!childRecords.length) {
+              return getExisting(staticParts.join('/'), pathSpecs)
+                .then(function (existing) {
+                  _.difference(existingPaths, existing).forEach(function (path) {
+                    var pathParts = path.split('/');
+                    var key = pathParts[pathParts.length - 1];
+                    var getParams = function (aPathParts, aPathSpecs, params, aStaticParts) {
+                      var i = aStaticParts ? aStaticParts.length : 0;
+                      while (i--) {
+                        aPathParts.splice(aPathParts.indexOf(aStaticParts[i]), 1);
+                      };
+
+                      var localPath = _.clone(aPathParts);
+                      var localSpecs = _.clone(aPathSpecs);
+                      var part = localPath.shift();
+                      var spec = localSpecs.shift();
+                      var params = params || {};
+
+                      if (part) {
+                        if (spec.isWildcard) {
+                          params[spec.name] = part;
+                        }
+                        return getParams(localPath, localSpecs, params);
+                      } else {
+                        return params;
+                      }
                     };
 
-                    var localPath = _.clone(aPathParts);
-                    var localSpecs = _.clone(aPathSpecs);
-                    var part = localPath.shift();
-                    var spec = localSpecs.shift();
-                    var params = params || {};
-
-                    if (part) {
-                      if (spec.isWildcard) {
-                        params[spec.name] = part;
-                      }
-                      return getParams(localPath, localSpecs, params);
-                    } else {
-                      return params;
-                    }
-                  };
-
-                  existingPaths.splice(existingPaths.indexOf(path), 1);
-                  processRecord({
-                    path: path,
-                    key: key,
-                    params: getParams(pathParts, pathSpecs, {}, staticParts)
+                    existingPaths.splice(existingPaths.indexOf(path), 1);
+                    processRecord({
+                      path: path,
+                      key: key,
+                      params: getParams(pathParts, pathSpecs, {}, staticParts)
+                    });
                   });
                 });
+            } else {
+              return childRecords.forEach(processRecord);
+            }
+
+          };
+          childRef.on('child_added', changedHandler);
+          childRef.on('child_changed', changedHandler);
+          childRef.on('child_changed', function (snap) {
+            changedHandler(snap, true);
+          })
+          childRef.on('child_removed', function (snap) {
+            snap.ref.once('value')
+              .then(function (snap) {
+                changedHandler(snap);
               });
-          } else {
-            return childRecords.forEach(processRecord);
+          });
+          getExistingCounter += 1;
+          if (getExistingCounter === specsCount) {
+            runner.emit('ready');
           }
-
-        };
-        childRef.on('child_added', changedHandler);
-        childRef.on('child_changed', changedHandler);
-        childRef.on('child_changed', function (snap) {
-          changedHandler(snap, true);
-        })
-        childRef.on('child_removed', function (snap) {
-          snap.ref.once('value')
-            .then(function (snap) {
-              changedHandler(snap);
-            });
         });
-      });
-
+    });
   });
 };
 inherits(FirebaseLocalFunctions, EventEmitter);

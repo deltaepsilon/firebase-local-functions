@@ -1,6 +1,6 @@
 {
   "name": "firebase-local-functions",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Run Firebase Functions locally for development",
   "main": "index.js",
   "scripts": {

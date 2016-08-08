@@ -36,9 +36,6 @@ ref.remove()
       var uid = "123";
       var itemRef = ref.child('queues/login/' + uid);
       var key = itemRef.push().key;
-      itemRef.child(key).set({
-        now: now
-      });
       var handler = function (snap) {
         var log = snap.val();
         snap.ref.remove()
@@ -61,6 +58,9 @@ ref.remove()
           });
       };
       logsRef.on('child_added', handler);
+      itemRef.child(key).set({
+        now: now
+      });
     });
 
     test('add long path', function (t) {
