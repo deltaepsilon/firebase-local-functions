@@ -124,7 +124,7 @@ function FirebaseLocalFunctions(config) {
 
     var getExisting = function (paths, specs) {
       if (config.skipGetExisting) return Promise.resolve([]); // Optionally short circuit getExisting
-      
+
       var root = ref.toString();
       var paths = Array.isArray(paths) ? paths : [paths];
       var localSpecs = _.clone(specs);
@@ -359,28 +359,33 @@ function FirebaseLocalFunctions(config) {
               runner.emit('ready');
             }
           };
-          axios.get(childRef.toString() + '.json?' + [
-            'auth=' + config.firebaseConfig.secret,
-            'shallow=true'
-          ].join('&'))
-            .then(function (res) {
-              var existingKeys = Object.keys(res.data || []);
-              var ignore = !!existingKeys.length;
-              if (!existingKeys.length) {
-                incrementExisting();
-              }
-              childRef.orderByKey().limitToLast(1).on('child_added', function (snap) {
-                if (ignore) {
-                  ignore = false;
+          if (config.skipGetExisting) {
+            axios.get(childRef.toString() + '.json?' + [
+              'auth=' + config.firebaseConfig.secret,
+              'shallow=true'
+            ].join('&'))
+              .then(function (res) {
+                var existingKeys = Object.keys(res.data || []);
+                var ignore = !!existingKeys.length;
+                if (!existingKeys.length) {
                   incrementExisting();
-                } else if (!~existingKeys.indexOf(snap.key)) {
-                  changedHandler(snap);
                 }
+                childRef.orderByKey().limitToLast(1).on('child_added', function (snap) {
+                  if (ignore) {
+                    ignore = false;
+                    incrementExisting();
+                  } else if (!~existingKeys.indexOf(snap.key)) {
+                    changedHandler(snap);
+                  }
+                });
+              })
+              .catch(function (err) {
+                console.log('Existing keys query error', err.config.url);
               });
-            })
-            .catch(function (err) {
-              console.log('Existing keys query error', err.config.url);
-            });
+          } else {
+            childRef.on('child_added', changedHandler);
+            incrementExisting();
+          }
 
           childRef.on('child_changed', function (snap) {
             changedHandler(snap, true);
