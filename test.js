@@ -6,13 +6,20 @@ var firebaseConfig = require('./env.json').firebaseConfig;
 firebase.initializeApp(firebaseConfig);
 
 var ref = firebase.database().ref(path);
+var existingRef = ref.child('queues/login/0000'); 
 ref.remove()
+  .then(function() {
+    return existingRef.set({
+      exists: true
+    });
+  })
   .then(function () {
     // Bootstrap local-functions runner
     var runner = require('./index.js')({
       specs: require('./test/test-specs'),
       firebaseConfig: firebaseConfig,
-      path: path
+      path: path,
+      skipGetExisting: true
     });
 
     // run tests!!!
@@ -21,12 +28,12 @@ ref.remove()
     var now = (new Date()).toString();
     var logsRef = ref.child('logs');
 
-    test('must start empty, plus timeout', function (t) {
+    test('must start with one record, plus timeout', function (t) {
       t.plan(1);
       runner.once('ready', function () {
         ref.once('value')
           .then(function (snap) {
-            t.equal(snap.val(), null);
+            t.equal(snap.val().queues.login['0000'].exists, true);
           });
       });
     });
@@ -144,9 +151,15 @@ ref.remove()
 
     test('must end empty', function (t) {
       t.plan(1);
-      ref.once('value')
+      existingRef.remove()
+        .then(function() {
+          return ref.once('value');    
+        })
         .then(function (snap) {
           t.equal(snap.val(), null);
+          setTimeout(function() {
+            process.exit();  
+          });
         });
     });
 

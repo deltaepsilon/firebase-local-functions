@@ -34,7 +34,7 @@ function FirebaseLocalFunctions(config) {
   var ref = firebase.app('localFunctionsRunner').database().ref(config.path);
   var specsCount = config.specs.length;
   var specsCounter = 0;
-  var getExistingCounter = 0; 
+  var getExistingCounter = 0;
 
   config.specs.forEach(function (spec) {
     var PARTS_REGEX = new RegExp('[^{}]+', 'g');
@@ -123,6 +123,8 @@ function FirebaseLocalFunctions(config) {
     });
 
     var getExisting = function (paths, specs) {
+      if (config.skipGetExisting) return Promise.resolve([]); // Optionally short circuit getExisting
+      
       var root = ref.toString();
       var paths = Array.isArray(paths) ? paths : [paths];
       var localSpecs = _.clone(specs);
@@ -350,8 +352,36 @@ function FirebaseLocalFunctions(config) {
             }
 
           };
-          childRef.on('child_added', changedHandler);
-          childRef.on('child_changed', changedHandler);
+
+          function incrementExisting() {
+            getExistingCounter += 1;
+            if (getExistingCounter === specsCount) {
+              runner.emit('ready');
+            }
+          };
+          axios.get(childRef.toString() + '.json?' + [
+            'auth=' + config.firebaseConfig.secret,
+            'shallow=true'
+          ].join('&'))
+            .then(function (res) {
+              var existingKeys = Object.keys(res.data || []);
+              var ignore = !!existingKeys.length;
+              if (!existingKeys.length) {
+                incrementExisting();
+              }
+              childRef.orderByKey().limitToLast(1).on('child_added', function (snap) {
+                if (ignore) {
+                  ignore = false;
+                  incrementExisting();
+                } else if (!~existingKeys.indexOf(snap.key)) {
+                  changedHandler(snap);
+                }
+              });
+            })
+            .catch(function (err) {
+              console.log('Existing keys query error', err.config.url);
+            });
+
           childRef.on('child_changed', function (snap) {
             changedHandler(snap, true);
           })
@@ -361,10 +391,6 @@ function FirebaseLocalFunctions(config) {
                 changedHandler(snap);
               });
           });
-          getExistingCounter += 1;
-          if (getExistingCounter === specsCount) {
-            runner.emit('ready');
-          }
         });
     });
   });
