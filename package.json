@@ -1,6 +1,6 @@
 {
   "name": "firebase-local-functions",
-  "version": "1.0.5",
+  "version": "1.1.0",
   "description": "Run Firebase Functions locally for development",
   "main": "index.js",
   "scripts": {
@@ -24,7 +24,8 @@
   "homepage": "https://github.com/deltaepsilon/firebase-local-functions",
   "dependencies": {
     "axios": "^0.12.0",
-    "firebase": "https://www.gstatic.com/firebasejs/staging/3.1.0-functions/firebase.tgz",
+    "firebase": "^3.6.0",
+    "firebase-admin": "^4.0.1",
     "lodash": "^4.13.1"
   },
   "devDependencies": {

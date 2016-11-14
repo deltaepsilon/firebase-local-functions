@@ -1,5 +1,6 @@
 var _ = require('lodash');
 var firebase = require('firebase');
+var admin = require('firebase-admin');
 var axios = require('axios');
 var inherits = require('util').inherits;
 var EventEmitter = require('events').EventEmitter;
@@ -28,10 +29,14 @@ function FirebaseLocalFunctions(config) {
     console.log('path must be a string');
   }
 
-  firebase.initializeApp(config.firebaseConfig, 'localFunctionsRunner');
+  var serviceAccount = require(config.firebaseConfig.serviceAccount);
+  admin.initializeApp({
+    databaseURL: config.firebaseConfig.databaseURL,
+    credential: admin.credential.cert(serviceAccount),
+  }, 'localFunctionsRunner');
 
   var runner = this;
-  var ref = firebase.app('localFunctionsRunner').database().ref(config.path);
+  var ref = admin.app('localFunctionsRunner').database().ref(config.path);
   var specsCount = config.specs.length;
   var specsCounter = 0;
   var getExistingCounter = 0;

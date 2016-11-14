@@ -1,11 +1,17 @@
 var test = require('tape');
+var env = require('./env.json');
 var firebase = require('firebase');
+var admin = require('firebase-admin');
 var path = 'localFunctions/test';
 var firebaseConfig = require('./env.json').firebaseConfig;
+var serviceAccount = require(firebaseConfig.serviceAccount);
 
-firebase.initializeApp(firebaseConfig);
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: firebaseConfig.databaseURL
+});
 
-var ref = firebase.database().ref(path);
+var ref = admin.database().ref(path);
 var existingRef = ref.child('queues/login/0000'); 
 ref.remove()
   .then(function() {
